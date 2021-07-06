@@ -29,7 +29,7 @@ def subsequence_mask(x) -> torch.BoolTensor:
     Args:
         x: [batch_size, seq_len]
     Returns:
-        BoolTensor: [seq_len, seq_len]
+        BoolTensor: [batch_size, seq_len, seq_len]
     """
     seq_len = x.size(1)
     return torch.ones(seq_len, seq_len).tril().bool()
@@ -48,7 +48,7 @@ class TokenEmbedding(nn.Module):
         Returns:
             Tensor: [batch_size, seq_len, d_model]
         """
-        return self.embed(x) * self.d_model**.5  # -> [batch_size, seq_len, d_model]
+        return self.embed(x) * self.d_model**.5
 
 
 class PostionalEncoding(nn.Module):
@@ -73,10 +73,10 @@ class PostionalEncoding(nn.Module):
         Args:
             x: [batch_size, seq_len]
         Returns:
-            Tensor: [seq_len, d_model]
+            Tensor: [batch_size, seq_len, d_model]
         """
         seq_len = x.size(1)
-        return self.encoding[:seq_len]  # -> [seq_len, d_model]
+        return self.encoding[:seq_len]
 
 
 class Embeddings(nn.Module):
@@ -93,8 +93,7 @@ class Embeddings(nn.Module):
         Returns:
             Tensor: [batch_size, seq_len, d_model]
         """
-        # [batch_size, seq_len, d_model] + [seq_len, d_model]
-        return self.dropout(self.embed(x) + self.encode(x))  # -> [batch_size, seq_len, d_model]
+        return self.dropout(self.embed(x) + self.encode(x))
 
 
 class LayerNorm(nn.Module):
@@ -116,10 +115,6 @@ class LayerNorm(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    """
-    Implementation of multi-head attention mechanism
-    """
-
     def __init__(self, d_model, n_heads, dropout=None):
         super(MultiHeadAttention, self).__init__()
         self.n_heads = n_heads
@@ -165,10 +160,6 @@ class MultiHeadAttention(nn.Module):
 
 
 class PositionwiseFeedForward(nn.Module):
-    """
-    Implement of FFN
-    """
-
     def __init__(self, d_model, d_hidden, dropout=.1):
         super(PositionwiseFeedForward, self).__init__()
         self.seq = nn.Sequential(
@@ -256,13 +247,13 @@ class DecoderLayer(nn.Module):
         self.norm3 = LayerNorm(d_model=d_model)
         self.dropout3 = nn.Dropout(dropout)
 
-    def forward(self, x, encoding, self_attn_mask, encoder_decoder_attn_mask):
+    def forward(self, x, memory, self_attn_mask, cross_attn_mask):
         """
         Args:
             x: [batch_size, seq_len, d_model]
-            encoding: [batch_size, seq_len, d_model], output of encoder
+            memory: [batch_size, seq_len, d_model], output of encoder
             self_attn_mask (BoolTensor): [seq_len, seq_len]
-            encoder_attn_mask (BoolTensor): [batch_size, 1, seq_len, seq_len]
+            cross_attn_mask (BoolTensor): [batch_size, 1, seq_len, seq_len]
         Returns:
             Tensor: [batch_size, seq_len, d_model]
         """
@@ -271,7 +262,7 @@ class DecoderLayer(nn.Module):
         x = self.norm1(x + res)  # add & norm
         x = self.dropout1(x)  # dropout
         res = x  # residual
-        x = self.attn2(x, encoding, encoding, mask=encoder_decoder_attn_mask)  # decoder-encoder attention
+        x = self.attn2(x, memory, memory, mask=cross_attn_mask)  # decoder-encoder attention
         x = self.norm2(x + res)  # add & norm
         x = self.dropout2(x)  # dropout
         res = x  # residual
@@ -290,7 +281,7 @@ class Decoder(nn.Module):
             for _ in range(n_layers)
         ])
 
-    def forward(self, source, target, encoding):
+    def forward(self, source, target, memory):
         """
         Args:
             source (LongTensor): [batch_size, seq_len]
@@ -301,11 +292,11 @@ class Decoder(nn.Module):
         """
         # calculate mask
         self_attn_mask = pad_mask(target) & subsequence_mask(target)
-        encoder_decoder_attn_mask = pad_mask(target, source)
+        cross_attn_mask = pad_mask(target, source)
         # calcuate output
         x = self.embed(target)
         for layer in self.layers:
-            x = layer(x, encoding, self_attn_mask, encoder_decoder_attn_mask)
+            x = layer(x, memory, self_attn_mask, cross_attn_mask)
         return x
 
 
@@ -319,8 +310,10 @@ class Generator(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, source_vocab_size, target_vocab_size, max_len=5000, d_model=512, d_ffn_hidden=2048,
-                 n_attn_heads=8, n_layers=6, dropout=.1):
+    def __init__(
+        self, source_vocab_size, target_vocab_size,
+        max_len=5000, d_model=512, d_ffn_hidden=2048, n_attn_heads=8, n_layers=6, dropout=.1
+    ):
         super(Transformer, self).__init__()
         self.encoder = Encoder(vocab_size=source_vocab_size, d_model=d_model, max_len=max_len, d_ffn_hidden=d_ffn_hidden,
                                n_layers=n_layers, n_attn_heads=n_attn_heads, dropout=dropout)
