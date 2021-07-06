@@ -107,7 +107,7 @@ class Embeddings(nn.Module):
     def forward(self, x):
         batch_size = x.size(0)
         cls_token = self.cls_token.expand(batch_size, 1, self.d_model)  # -> [batch_size, 1, d_model]
-        x = torch.cat([x, cls_token], dim=1)  # -> [batch_size, n_patches + 1, d_model]
+        x = torch.cat([cls_token, x], dim=1)  # -> [batch_size, n_patches + 1, d_model]
         x += self.embedding
         return x  # -> [batch_size, n_patches + 1, d_model]
 
@@ -143,8 +143,7 @@ class ViT(nn.Module):
         d_model=64, d_attn=64, d_ffn=2048, n_heads=8, n_layers=6, pool='cls', dropout=.1
     ):
         super(ViT, self).__init__()
-        self.pool = pool
-        assert self.pool in ['cls', 'mean']
+        assert pool in ['cls', 'mean']
         patch_h, patch_w = patch_size
         n_patches = (image_size[0] // patch_h) * (image_size[1] // patch_w)
         self.to_patches = PatchesEmbed(
@@ -152,11 +151,11 @@ class ViT(nn.Module):
             n_patches=n_patches, patch_h=patch_h, patch_w=patch_w)
         self.embed = Embeddings(d_model=d_model, n_patches=n_patches)
         self.dropout = nn.Dropout(dropout)
-
         self.encoder = Encoder(
             d_model=d_model, d_attn=d_attn, d_ffn=d_ffn,
             n_heads=n_heads, n_layers=n_layers, dropout=dropout)
         self.mlp_head = MLPHead(d_model, n_classes)
+        self.pool = pool
 
     def forward(self, x):
         """
