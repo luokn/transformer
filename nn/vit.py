@@ -97,9 +97,9 @@ class Encoder(nn.Module):
         return self.seq(x)
 
 
-class Embeddings(nn.Module):
+class PositionEmbed(nn.Module):
     def __init__(self, d_model, n_patches):
-        super(Embeddings, self).__init__()
+        super(PositionEmbed, self).__init__()
         self.d_model = d_model
         self.cls_token = nn.Parameter(torch.empty(d_model), requires_grad=True)
         self.embedding = nn.Parameter(torch.empty(n_patches + 1, d_model), requires_grad=True)
@@ -112,9 +112,9 @@ class Embeddings(nn.Module):
         return x  # -> [batch_size, n_patches + 1, d_model]
 
 
-class PatchesEmbed(nn.Module):
+class PatchEmbed(nn.Module):
     def __init__(self, d_model, n_channels, n_patches, patch_h, patch_w):
-        super(PatchesEmbed, self).__init__()
+        super(PatchEmbed, self).__init__()
         self.n_patches, self.patch_h, self.patch_w = n_patches, patch_h, patch_w
         self.proj = nn.Linear(self.patch_h * self.patch_w * n_channels, d_model)
 
@@ -146,14 +146,21 @@ class ViT(nn.Module):
         assert pool in ['cls', 'mean']
         patch_h, patch_w = patch_size
         n_patches = (image_size[0] // patch_h) * (image_size[1] // patch_w)
-        self.to_patches = PatchesEmbed(
-            d_model=d_model, n_channels=n_channels,
-            n_patches=n_patches, patch_h=patch_h, patch_w=patch_w)
-        self.embed = Embeddings(d_model=d_model, n_patches=n_patches)
+        self.to_patches = PatchEmbed(
+            d_model=d_model,
+            n_channels=n_channels,
+            n_patches=n_patches,
+            patch_h=patch_h,
+            patch_w=patch_w)
+        self.embed = PositionEmbed(d_model=d_model, n_patches=n_patches)
         self.dropout = nn.Dropout(dropout)
         self.encoder = Encoder(
-            d_model=d_model, d_attn=d_attn, d_ffn=d_ffn,
-            n_heads=n_heads, n_layers=n_layers, dropout=dropout)
+            d_model=d_model,
+            d_attn=d_attn,
+            d_ffn=d_ffn,
+            n_heads=n_heads,
+            n_layers=n_layers,
+            dropout=dropout)
         self.mlp_head = MLPHead(d_model, n_classes)
         self.pool = pool
 
