@@ -156,7 +156,8 @@ class MultiHeadAttention(nn.Module):
         v = attn @ v  # -> [n_heads, batch_size, seq_len, d_v]
         # [batch_size, seq_len, n_heads, d_v] -> [batch_size, seq_len, d_model]
         v = v.permute(1, 2, 0, 3).reshape(batch_size, seq_len, -1)
-        return self.proj(v)  # -> [batch_size, seq_len, d_model]
+        out = self.proj(v)  # -> [batch_size, seq_len, d_model]
+        return self.dropout(out) if self.dropout else out
 
 
 class PositionwiseFeedForward(nn.Module):
@@ -180,13 +181,13 @@ class PositionwiseFeedForward(nn.Module):
 
 
 class EncoderLayer(nn.Module):
-    def __init__(self, d_model, d_ffn_hidden, n_attn_heads=8, dropout=.1):
+    def __init__(self, d_model, d_ffn, n_heads=8, dropout=.1):
         super(EncoderLayer, self).__init__()
-        self.attn = MultiHeadAttention(d_model=d_model, n_heads=n_attn_heads)
+        self.attn = MultiHeadAttention(d_model=d_model, n_heads=n_heads)
         self.norm1 = LayerNorm(d_model=d_model)
         self.dropout1 = nn.Dropout(dropout)
 
-        self.ffn = PositionwiseFeedForward(d_model=d_model, d_hidden=d_ffn_hidden, dropout=dropout)
+        self.ffn = PositionwiseFeedForward(d_model=d_model, d_hidden=d_ffn, dropout=dropout)
         self.norm2 = LayerNorm(d_model=d_model)
         self.dropout2 = nn.Dropout(dropout)
 
@@ -210,11 +211,11 @@ class EncoderLayer(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, vocab_size, d_model, max_len, d_ffn_hidden, n_layers=6, n_attn_heads=8, dropout=.1):
+    def __init__(self, vocab_size, d_model, max_len, d_ffn, n_layers=6, n_heads=8, dropout=.1):
         super().__init__()
         self.embed = Embeddings(vocab_size=vocab_size, d_model=d_model, max_len=max_len, dropout=dropout)
         self.layers = nn.ModuleList([
-            EncoderLayer(d_model=d_model, d_ffn_hidden=d_ffn_hidden, n_attn_heads=n_attn_heads, dropout=dropout)
+            EncoderLayer(d_model=d_model, d_ffn=d_ffn, n_heads=n_heads, dropout=dropout)
             for _ in range(n_layers)
         ])
 
@@ -233,17 +234,17 @@ class Encoder(nn.Module):
 
 
 class DecoderLayer(nn.Module):
-    def __init__(self, d_model, d_ffn_hidden, n_attn_heads=8, dropout=.1):
+    def __init__(self, d_model, d_ffn, n_heads=8, dropout=.1):
         super(DecoderLayer, self).__init__()
-        self.attn1 = MultiHeadAttention(d_model=d_model, n_heads=n_attn_heads)
+        self.attn1 = MultiHeadAttention(d_model=d_model, n_heads=n_heads)
         self.norm1 = LayerNorm(d_model=d_model)
         self.dropout1 = nn.Dropout(dropout)
 
-        self.attn2 = MultiHeadAttention(d_model=d_model, n_heads=n_attn_heads)
+        self.attn2 = MultiHeadAttention(d_model=d_model, n_heads=n_heads)
         self.norm2 = LayerNorm(d_model=d_model)
         self.dropout2 = nn.Dropout(dropout)
 
-        self.ffn = PositionwiseFeedForward(d_model=d_model, d_hidden=d_ffn_hidden, dropout=dropout)
+        self.ffn = PositionwiseFeedForward(d_model=d_model, d_hidden=d_ffn, dropout=dropout)
         self.norm3 = LayerNorm(d_model=d_model)
         self.dropout3 = nn.Dropout(dropout)
 
@@ -273,11 +274,11 @@ class DecoderLayer(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, vocab_size, d_model, max_len, d_ffn_hidden, n_layers=6, n_attn_heads=8, dropout=.1):
+    def __init__(self, vocab_size, d_model, max_len, d_ffn, n_layers=6, n_heads=8, dropout=.1):
         super().__init__()
         self.embed = Embeddings(vocab_size=vocab_size, d_model=d_model, max_len=max_len, dropout=dropout)
         self.layers = nn.ModuleList([
-            DecoderLayer(d_model=d_model, d_ffn_hidden=d_ffn_hidden, n_attn_heads=n_attn_heads, dropout=dropout)
+            DecoderLayer(d_model=d_model, d_ffn=d_ffn, n_heads=n_heads, dropout=dropout)
             for _ in range(n_layers)
         ])
 
@@ -312,13 +313,13 @@ class Generator(nn.Module):
 class Transformer(nn.Module):
     def __init__(
         self, source_vocab_size, target_vocab_size,
-        max_len=5000, d_model=512, d_ffn_hidden=2048, n_attn_heads=8, n_layers=6, dropout=.1
+        max_len=5000, d_model=512, d_ffn=2048, n_heads=8, n_layers=6, dropout=.1
     ):
         super(Transformer, self).__init__()
-        self.encoder = Encoder(vocab_size=source_vocab_size, d_model=d_model, max_len=max_len, d_ffn_hidden=d_ffn_hidden,
-                               n_layers=n_layers, n_attn_heads=n_attn_heads, dropout=dropout)
-        self.decoder = Decoder(vocab_size=target_vocab_size, d_model=d_model, max_len=max_len, d_ffn_hidden=d_ffn_hidden,
-                               n_layers=n_layers, n_attn_heads=n_attn_heads, dropout=dropout)
+        self.encoder = Encoder(vocab_size=source_vocab_size, d_model=d_model, max_len=max_len, d_ffn=d_ffn,
+                               n_layers=n_layers, n_heads=n_heads, dropout=dropout)
+        self.decoder = Decoder(vocab_size=target_vocab_size, d_model=d_model, max_len=max_len, d_ffn=d_ffn,
+                               n_layers=n_layers, n_heads=n_heads, dropout=dropout)
         self.generator = Generator(target_vocab_size, d_model)
 
     def forward(self, source, target):
@@ -336,3 +337,27 @@ class Transformer(nn.Module):
         #========== generate ==========#
         output = self.generator(decoding)  # -> [batch_size, seq_len, target_vocab_size]
         return output
+
+
+if __name__ == "__main__":
+    sentences = [
+        ['i love you <space>', '<bos> ich liebe dich', 'ich liebe dich <eos>'],
+        ['you love me <space>', '<bos> du liebst mich', 'du liebst mich <eos>']
+    ]
+    source_vocab = ['<space>', 'i', 'love', 'you', 'me']
+    target_vocab = ['<space>', '<bos>', '<eos>', 'ich', 'liebe', 'dich', 'du', 'liebst', 'mich']
+    source_vocab_dict = {word: i for i, word in enumerate(source_vocab)}
+    target_vocab_dict = {word: i for i, word in enumerate(target_vocab)}
+    encoder_inputs = torch.tensor([[source_vocab_dict[word] for word in strs[0].split(' ')] for strs in sentences])
+    decoder_inputs = torch.tensor([[target_vocab_dict[word] for word in strs[1].split(' ')] for strs in sentences])
+    decoder_outputs = torch.tensor([[target_vocab_dict[word] for word in strs[2].split(' ')] for strs in sentences])
+
+    print(source_vocab_dict)
+    print(target_vocab_dict)
+    print(encoder_inputs)
+    print(decoder_inputs)
+    print(decoder_outputs)
+
+    transformer = Transformer(source_vocab_size=len(source_vocab), target_vocab_size=len(target_vocab), max_len=4)
+    output = transformer(encoder_inputs, decoder_inputs)
+    print(output.shape)
