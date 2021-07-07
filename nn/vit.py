@@ -39,33 +39,31 @@ class PositionwiseFeedForward(nn.Module):
 
 
 class SelfMultiHeadAttention(nn.Module):
-    def __init__(self, n_features, d_attn, n_heads=8, dropout=.1):
+    def __init__(self, n_features, d_attn, n_heads=8, bias=False, dropout=.1):
         super(SelfMultiHeadAttention, self).__init__()
         self.n_heads = n_heads
-        self.to_qkv = nn.Linear(n_features, 3 * n_heads * d_attn, bias=False)
-        self.to_out = nn.Linear(n_heads * d_attn, n_features)
+        self.to_qkv = nn.Linear(n_features, 3 * n_heads * d_attn, bias=bias)
+        self.proj = nn.Linear(n_heads * d_attn, n_features)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         batch_size, n_patches = x.size(0), x.size(1)
-        # [batch_size, n_patches, 3 × n_heads × d_attn] -> [batch_size, n_patches, 3, n_heads, d_attn]
-        qkv = self.to_qkv(x).reshape(batch_size, n_patches, 3, self.n_heads, -1)
+        # [batch_size, n_patches, 3 × n_heads × d_attn] -> [batch_size, n_patches, 3, n_heads, d_attn] ->
         # [batch_size, n_heads, 3, n_patches, d_attn] -> 3 × [batch_size, n_heads, n_patches, d_attn]
-        q, k, v = qkv.transpose(1, 3).unbind(2)
+        q, k, v = self.to_qkv(x).reshape(batch_size, n_patches, 3, self.n_heads, -1).transpose(1, 3).unbind(2)
         # [batch_size, n_heads, n_patches, d_attn] @ [batch_size, n_heads, d_attn, n_patches] / \sqrt{d_attn}
         scaled_dot_prod = q @ k.transpose(-1, -2) * k.size(-1)**-.5  # -> [ batch_size, n_heads, n_patches, n_patches]
         attn = torch.softmax(scaled_dot_prod, dim=-1)  # -> [batch_size, n_heads, n_patches, n_patches]
         # [batch_size, n_heads, n_patches, n_patches] @ [batch_size, n_heads, n_patches, d_attn]
         v = attn @ v  # -> [batch_size, n_heads, n_patches, d_attn]
         v = v.transpose(1, 2).reshape(batch_size, n_patches, -1)  # -> [batch_size, n_patches, n_heads × d_attn]
-        out = self.to_out(v)  # -> [ batch_size, n_patches, n_features]
-        return self.dropout(out)
+        return self.dropout(self.proj(v))  # -> [ batch_size, n_patches, n_features]
 
 
 class EncoderLayer(nn.Module):
-    def __init__(self, d_model, d_attn, d_ffn, n_heads, dropout=.1):
+    def __init__(self, d_model, d_attn, d_ffn, n_heads=8, dropout=.1):
         super(EncoderLayer, self).__init__()
-        self.attn = SelfMultiHeadAttention(d_model, d_attn, n_heads)
+        self.attn = SelfMultiHeadAttention(d_model, d_attn, n_heads, dropout=dropout)
         self.norm1 = LayerNorm(d_model)
         self.dropout1 = nn.Dropout(dropout)
 
@@ -86,7 +84,7 @@ class EncoderLayer(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, d_model, d_attn, d_ffn, n_heads, n_layers, dropout=.1):
+    def __init__(self, d_model, d_attn, d_ffn, n_heads=8, n_layers=6, dropout=.1):
         super(Encoder, self).__init__()
         self.seq = nn.Sequential(*(
             EncoderLayer(d_model, d_attn, d_ffn, n_heads, dropout=dropout)
@@ -146,21 +144,10 @@ class ViT(nn.Module):
         assert pool in ['cls', 'mean']
         patch_h, patch_w = patch_size
         n_patches = (image_size[0] // patch_h) * (image_size[1] // patch_w)
-        self.to_patches = PatchEmbed(
-            d_model=d_model,
-            n_channels=n_channels,
-            n_patches=n_patches,
-            patch_h=patch_h,
-            patch_w=patch_w)
-        self.embed = PositionEmbed(d_model=d_model, n_patches=n_patches)
+        self.to_patches = PatchEmbed(d_model, n_channels, n_patches, patch_h, patch_w)
+        self.embed = PositionEmbed(d_model, n_patches)
         self.dropout = nn.Dropout(dropout)
-        self.encoder = Encoder(
-            d_model=d_model,
-            d_attn=d_attn,
-            d_ffn=d_ffn,
-            n_heads=n_heads,
-            n_layers=n_layers,
-            dropout=dropout)
+        self.encoder = Encoder(d_model, d_attn, d_ffn, n_heads, n_layers, dropout=dropout)
         self.mlp_head = MLPHead(d_model, n_classes)
         self.pool = pool
 
