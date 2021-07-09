@@ -172,7 +172,7 @@ class ViT(nn.Module):
 
 if __name__ == '__main__':
     B, H, W, C, h, w = 32, 100, 100, 3, 10, 10
-    vit = ViT(image_size=[H, W], patch_size=[h, w], n_channels=3, n_classes=5, )
+    vit = ViT(image_size=[H, W], patch_size=[h, w], n_channels=3, n_classes=5)
     x = torch.randn(B, H, W, C)
     y = vit(x)
     print(y.shape)
