@@ -211,9 +211,9 @@ class EncoderLayer(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, vocab_size, d_model, max_len, d_ffn, n_layers=6, n_heads=8, dropout=.1):
+    def __init__(self, vocab_size, max_len, d_model, d_ffn, n_heads=8, n_layers=6, dropout=.1):
         super().__init__()
-        self.embed = Embeddings(vocab_size=vocab_size, d_model=d_model, max_len=max_len, dropout=dropout)
+        self.embed = Embeddings(vocab_size=vocab_size, max_len=max_len, d_model=d_model, dropout=dropout)
         self.layers = nn.ModuleList([
             EncoderLayer(d_model=d_model, d_ffn=d_ffn, n_heads=n_heads, dropout=dropout)
             for _ in range(n_layers)
@@ -274,9 +274,9 @@ class DecoderLayer(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, vocab_size, d_model, max_len, d_ffn, n_layers=6, n_heads=8, dropout=.1):
+    def __init__(self, vocab_size, max_len, d_model, d_ffn, n_heads=8, n_layers=6, dropout=.1):
         super().__init__()
-        self.embed = Embeddings(vocab_size=vocab_size, d_model=d_model, max_len=max_len, dropout=dropout)
+        self.embed = Embeddings(vocab_size=vocab_size, max_len=max_len, d_model=d_model, dropout=dropout)
         self.layers = nn.ModuleList([
             DecoderLayer(d_model=d_model, d_ffn=d_ffn, n_heads=n_heads, dropout=dropout)
             for _ in range(n_layers)
@@ -312,14 +312,14 @@ class Generator(nn.Module):
 
 class Transformer(nn.Module):
     def __init__(
-        self, source_vocab_size, target_vocab_size,
-        max_len=5000, d_model=512, d_ffn=2048, n_heads=8, n_layers=6, dropout=.1
+        self, source_vocab_size, target_vocab_size, max_len,
+        d_model=512, d_ffn=2048, n_heads=8, n_layers=6, dropout=.1
     ):
         super(Transformer, self).__init__()
-        self.encoder = Encoder(vocab_size=source_vocab_size, d_model=d_model, max_len=max_len, d_ffn=d_ffn,
-                               n_layers=n_layers, n_heads=n_heads, dropout=dropout)
-        self.decoder = Decoder(vocab_size=target_vocab_size, d_model=d_model, max_len=max_len, d_ffn=d_ffn,
-                               n_layers=n_layers, n_heads=n_heads, dropout=dropout)
+        self.encoder = Encoder(vocab_size=source_vocab_size, max_len=max_len, d_model=d_model, d_ffn=d_ffn,
+                               n_heads=n_heads, n_layers=n_layers, dropout=dropout)
+        self.decoder = Decoder(vocab_size=target_vocab_size, max_len=max_len, d_model=d_model, d_ffn=d_ffn,
+                               n_heads=n_heads, n_layers=n_layers, dropout=dropout)
         self.generator = Generator(target_vocab_size, d_model)
 
     def forward(self, source, target):
