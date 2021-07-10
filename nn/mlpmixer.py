@@ -8,6 +8,7 @@
 
 
 from functools import partial
+
 import torch
 from torch import nn
 
@@ -73,7 +74,7 @@ class MLPMixer(nn.Sequential):
         d_model=512, exp_factor=4, depth=12, dropout=0.1
     ):
         patch_h, patch_w = patch_size
-        assert image_size[0] % patch_h == 0 and image_size[1] % patch_w == 0
+        assert image_size[0] % patch_h == image_size[1] % patch_w == 0
         n_patches = (image_size[0] // patch_h) * (image_size[1] // patch_w)
         super(MLPMixer, self).__init__(
             ToPatches(d_model, n_channels, n_patches, patch_h, patch_w),

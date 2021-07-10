@@ -128,7 +128,7 @@ class ViT(nn.Module):
     ):
         super(ViT, self).__init__()
         patch_h, patch_w = patch_size
-        assert image_size[0] % patch_h == 0 and image_size[1] % patch_w == 0
+        assert image_size[0] % patch_h == image_size[1] % patch_w == 0
         assert pool in ['cls', 'mean']
         self.pool = pool
         n_patches = (image_size[0] // patch_h) * (image_size[1] // patch_w)
