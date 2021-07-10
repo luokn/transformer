@@ -102,14 +102,14 @@ class PositionEmbed(nn.Module):
 
 
 class PatchEmbed(nn.Module):
-    def __init__(self, d_model, n_channels, n_patches, patch_h, patch_w):
+    def __init__(self, out_features, n_channels, n_patches, patch_h, patch_w):
         super(PatchEmbed, self).__init__()
-        self.n_patches, self.patch_h, self.patch_w = n_patches, patch_h, patch_w
-        self.proj = nn.Linear(self.patch_h * self.patch_w * n_channels, d_model)
+        self.n_patches, self.h, self.w = n_patches, patch_h, patch_w
+        self.proj = nn.Linear(self.h * self.w * n_channels, out_features)
 
     def forward(self, x):
         batch_size, h, w, _ = x.size()
-        patches = x.reshape(batch_size, h // self.patch_h, self. patch_h, w // self.patch_w, self.patch_w, -1)
+        patches = x.reshape(batch_size, h // self.h, self. h, w // self.w, self.w, -1)
         return self.proj(patches.transpose(2, 3).reshape(batch_size, self.n_patches, -1))
 
 
