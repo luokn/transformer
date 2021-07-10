@@ -23,19 +23,15 @@ class LayerNorm(nn.Module):
         return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
 
-class PositionwiseFeedForward(nn.Module):
+class FeedForward(nn.Sequential):
     def __init__(self, n_features, d_hidden, dropout=0.1):
-        super(PositionwiseFeedForward, self).__init__()
-        self.seq = nn.Sequential(
+        super(FeedForward, self).__init__(
             nn.Linear(n_features, d_hidden),
             nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(d_hidden, n_features),
             nn.Dropout(dropout)
         )
-
-    def forward(self, x):
-        return self.seq(x)
 
 
 class SelfMultiHeadAttention(nn.Module):
@@ -67,7 +63,7 @@ class EncoderLayer(nn.Module):
         self.norm1 = LayerNorm(d_model)
         self.dropout1 = nn.Dropout(dropout)
 
-        self.ffn = PositionwiseFeedForward(d_model, d_ffn, dropout=dropout)
+        self.ffn = FeedForward(d_model, d_ffn, dropout=dropout)
         self.norm2 = LayerNorm(d_model)
         self.dropout2 = nn.Dropout(dropout)
 
@@ -83,16 +79,11 @@ class EncoderLayer(nn.Module):
         return x
 
 
-class Encoder(nn.Module):
+class Encoder(nn.Sequential):
     def __init__(self, d_model, d_attn, d_ffn, n_heads=8, n_layers=6, dropout=.1):
-        super(Encoder, self).__init__()
-        self.seq = nn.Sequential(*(
-            EncoderLayer(d_model, d_attn, d_ffn, n_heads, dropout=dropout)
-            for _ in range(n_layers)
-        ))
-
-    def forward(self, x):
-        return self.seq(x)
+        super(Encoder, self).__init__(*[
+            EncoderLayer(d_model, d_attn, d_ffn, n_heads, dropout=dropout) for _ in range(n_layers)
+        ])
 
 
 class PositionEmbed(nn.Module):
@@ -119,20 +110,15 @@ class PatchEmbed(nn.Module):
     def forward(self, x):
         batch_size, h, w, _ = x.size()
         patches = x.reshape(batch_size, h // self.patch_h, self. patch_h, w // self.patch_w, self.patch_w, -1)
-        patches = patches.transpose(2, 3).reshape(batch_size, self.n_patches, -1)
-        return self.proj(patches)
+        return self.proj(patches.transpose(2, 3).reshape(batch_size, self.n_patches, -1))
 
 
-class MLPHead(nn.Module):
+class MLPHead(nn.Sequential):
     def __init__(self, d_model, n_classes):
-        super(MLPHead, self).__init__()
-        self.seq = nn.Sequential(
+        super(MLPHead, self).__init__(
             nn.LayerNorm(d_model),
             nn.Linear(d_model, n_classes)
         )
-
-    def forward(self, x):
-        return self.seq(x)
 
 
 class ViT(nn.Module):
@@ -141,15 +127,16 @@ class ViT(nn.Module):
         d_model=64, d_attn=64, d_ffn=2048, n_heads=8, n_layers=6, pool='cls', dropout=.1
     ):
         super(ViT, self).__init__()
-        assert pool in ['cls', 'mean']
         patch_h, patch_w = patch_size
+        assert image_size[0] % patch_h == 0 and image_size[1] % patch_w == 0
+        assert pool in ['cls', 'mean']
+        self.pool = pool
         n_patches = (image_size[0] // patch_h) * (image_size[1] // patch_w)
         self.to_patches = PatchEmbed(d_model, n_channels, n_patches, patch_h, patch_w)
         self.embed = PositionEmbed(d_model, n_patches)
         self.dropout = nn.Dropout(dropout)
         self.encoder = Encoder(d_model, d_attn, d_ffn, n_heads, n_layers, dropout=dropout)
         self.mlp_head = MLPHead(d_model, n_classes)
-        self.pool = pool
 
     def forward(self, x):
         """

@@ -160,24 +160,14 @@ class MultiHeadAttention(nn.Module):
         return self.dropout(out) if self.dropout else out
 
 
-class PositionwiseFeedForward(nn.Module):
+class PositionwiseFeedForward(nn.Sequential):
     def __init__(self, d_model, d_hidden, dropout=.1):
-        super(PositionwiseFeedForward, self).__init__()
-        self.seq = nn.Sequential(
+        super(PositionwiseFeedForward, self).__init__(
             nn.Linear(d_model, d_hidden),
             nn.ReLU(),
             nn.Linear(d_hidden, d_model),
             nn.Dropout(dropout)
         )
-
-    def forward(self, x):
-        """
-        Args:
-            x: [batch_size, seq_len, d_model]
-        Returns:
-            Tensor: [batch_size, seq_len, d_model]
-        """
-        return self.seq(x)
 
 
 class EncoderLayer(nn.Module):
@@ -301,13 +291,12 @@ class Decoder(nn.Module):
         return x
 
 
-class Generator(nn.Module):
+class Generator(nn.Sequential):
     def __init__(self, vocab_size, d_model):
-        super(Generator, self).__init__()
-        self.proj = nn.Linear(d_model, vocab_size)
-
-    def forward(self, x):
-        return self.proj(x).log_softmax(dim=-1)  # [batch_size, seq_len, vocab_size]
+        super(Generator, self).__init__(
+            nn.Linear(d_model, vocab_size),
+            nn.LogSoftmax(dim=-1)
+        )
 
 
 class Transformer(nn.Module):
