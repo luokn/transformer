@@ -10,16 +10,8 @@
 from functools import partial
 
 import torch
+from einops.layers.torch import Rearrange, Reduce
 from torch import nn
-
-
-class Lambda(nn.Module):
-    def __init__(self, fn):
-        super(Lambda, self).__init__()
-        self.fn = fn
-
-    def forward(self, x):
-        return self.fn(x)
 
 
 class Residual(nn.Module):
@@ -29,18 +21,6 @@ class Residual(nn.Module):
 
     def forward(self, x):
         return self.net(x) + x
-
-
-class ToPatches(nn.Module):
-    def __init__(self, out_features, n_channels, n_patches, patch_h, patch_w):
-        super(ToPatches, self).__init__()
-        self.n, self.h, self.w = n_patches, patch_h, patch_w
-        self.proj = nn.Linear(self.h * self.w * n_channels, out_features)
-
-    def forward(self, x):
-        batch_size, h, w, _ = x.size()
-        patches = x.reshape(batch_size, h // self.h, self. h, w // self.w, self.w, -1)
-        return self.proj(patches.transpose(2, 3).reshape(batch_size, self.n, -1))
 
 
 class FeedForward(nn.Sequential):
@@ -74,13 +54,13 @@ class MLPMixer(nn.Sequential):
         d_model=512, exp_factor=4, depth=12, dropout=0.1
     ):
         patch_h, patch_w = patch_size
-        assert image_size[0] % patch_h == image_size[1] % patch_w == 0
         n_patches = (image_size[0] // patch_h) * (image_size[1] // patch_w)
         super(MLPMixer, self).__init__(
-            ToPatches(d_model, n_channels, n_patches, patch_h, patch_w),
+            Rearrange('b (r h) (s w) c -> b (r s) (h w c)', h=patch_h, w=patch_w),
+            nn.Linear(patch_h * patch_w * n_channels, d_model),
             Encoder(d_model, n_patches, exp_factor, depth, dropout=dropout),
             nn.LayerNorm(d_model),
-            Lambda(lambda x: torch.mean(x, dim=1)),
+            Reduce('b n c -> b c', reduction='mean'),
             nn.Linear(d_model, n_classes),
         )
 
