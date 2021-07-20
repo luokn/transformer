@@ -51,17 +51,17 @@ class Encoder(nn.Sequential):
 class MLPMixer(nn.Sequential):
     def __init__(
         self, image_size, patch_size, n_channels, n_classes,
-        d_model=512, exp_factor=4, depth=12, dropout=0.1
+        dim=512, exp_factor=4, depth=12, dropout=0.1
     ):
         patch_h, patch_w = patch_size
         n_patches = (image_size[0] // patch_h) * (image_size[1] // patch_w)
         super(MLPMixer, self).__init__(
             Rearrange('b (r h) (s w) c -> b (r s) (h w c)', h=patch_h, w=patch_w),
-            nn.Linear(patch_h * patch_w * n_channels, d_model),
-            Encoder(d_model, n_patches, exp_factor, depth, dropout=dropout),
-            nn.LayerNorm(d_model),
+            nn.Linear(patch_h * patch_w * n_channels, dim),
+            Encoder(dim, n_patches, exp_factor, depth, dropout=dropout),
+            nn.LayerNorm(dim),
             Reduce('b n c -> b c', reduction='mean'),
-            nn.Linear(d_model, n_classes),
+            nn.Linear(dim, n_classes),
         )
 
 
