@@ -24,25 +24,25 @@ class Residual(nn.Module):
 
 
 class FeedForward(nn.Sequential):
-    def __init__(self, n_features, exp_factor, dropout, dense="cov"):
+    def __init__(self, dim, exp_factor, dense="cov", dropout=.1):
         Dense = partial(nn.Conv1d, kernel_size=1) if dense == "cov" else nn.Linear
         super(FeedForward, self).__init__(
-            Dense(n_features, n_features * exp_factor), nn.GELU(), nn.Dropout(dropout),
-            Dense(n_features * exp_factor, n_features), nn.Dropout(dropout)
+            Dense(dim, dim * exp_factor), nn.GELU(), nn.Dropout(dropout),
+            Dense(dim * exp_factor, dim), nn.Dropout(dropout)
         )
 
 
 class Encoder(nn.Sequential):
-    def __init__(self, d_model, n_patches, exp_factor, depth, dropout):
+    def __init__(self, dim, n_patches, exp_factor, depth, dropout=.1):
         super(Encoder, self).__init__(*[
             nn.Sequential(
                 Residual(nn.Sequential(
-                    nn.LayerNorm(d_model),
-                    FeedForward(n_patches, exp_factor, dropout, dense='cov')
+                    nn.LayerNorm(dim),
+                    FeedForward(n_patches, exp_factor, dense='cov', dropout=dropout),
                 )),
                 Residual(nn.Sequential(
-                    nn.LayerNorm(d_model),
-                    FeedForward(d_model, exp_factor, dropout, dense='linear')
+                    nn.LayerNorm(dim),
+                    FeedForward(dim, exp_factor, dense='linear', dropout=dropout)
                 ))
             ) for _ in range(depth)
         ])
